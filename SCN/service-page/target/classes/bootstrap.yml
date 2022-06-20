@@ -1,0 +1,104 @@
+server:
+  port: 9100
+
+spring:
+  application:
+    name: service-page
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/springcloud?useUnicode=true&characterEncoding=utf8&serverTimezone=UTC
+    username: root
+    password: sunshine
+  cloud:
+    config: #针对config分布式配置中心的配置，config server
+      uri: http://localhost:9400 #config server
+      name: application # application-page.yml
+      profile: dev #profile值
+      label: main #分支名称
+  rabbitmq:
+    host: 192.168.100.10
+    port: 5672
+    username: ly
+    password: shine
+
+eureka:
+  client: #Eureka server本身也是eureka的一个客户端，因为在集群下需要与其他eureka server进行数据的同步
+    service-url:  # 定义eureka server url
+      defaultZone: http://CloudEurekaServerA:9200/eureka,http://CloudEurekaServerB:9201/eureka
+    register-with-eureka: true  #表示是否向Eureka中心注册自己的信息，默认为true
+    fetch-registry: true #是否拉取Eureka server服务注册列表，默认为true
+  instance:
+    #    hostname: localhost #当前eureka实例的主机名
+    #使用ip注册，否则会使用主机名注册了（此处考虑到对老版本的兼容，新版本经过实验都是ip）
+    prefer-ip-address: true
+    #自定义实例显示格式，加上版本号，便于多版本管理，注意是ip-address，早期版本是ipAddress
+    instance-id: ${spring.cloud.client.ip-address}:${spring.application.name}:${server.port}:@project.version@
+
+#针对的被调用方微服务名称,不加就是全局生效
+service-product:
+  ribbon:
+#    NFLoadBalancerRuleClassName: com.netflix.loadbalancer.RandomRule #随机策略
+#    NFLoadBalancerRuleClassName: com.netflix.loadbalancer.RoundRobinRule #轮询策略
+    #请求连接超时时间
+    ConnectTimeout: 2000
+    #请求处理超时时间
+    ReadTimeout: 8000
+    #对所有操作都进行重试
+    OkToRetryOnAllOperations: true
+    #根据如上配置，当访问到故障请求的时候，它会再尝试访问一次当前实例（次数由MaxAutoRetries配置），
+    #如果不行，就换一个实例进行访问，如果还不行，再换一次实例访问（更换次数由MaxAutoRetriesNextServer配置），
+    #如果依然不行，返回失败信息
+    MaxAutoRetries: 0 #对当前选中实例重试次数，不包括第一次调用
+    MaxAutoRetriesNextServer: 0 #切换实例的重试次数
+    NFLoadBalancerRuleClassName: com.netflix.loadbalancer.RoundRobinRule #负载策略调整
+
+# 配置熔断策略：
+hystrix:
+  command:
+    default:
+      circuitBreaker:
+        # 强制打开熔断器，如果该属性设置为true，强制断路器进入打开状态，将会拒绝所有的请求。默认false关闭的
+        forceOpen: false
+        # 熔断触发最小请求次数，默认值是20
+        requestVolumeThreshold: 2
+        # 触发熔断错误比例阈值，默认值50%
+        errorThresholdPercentage: 50
+        # 熔断后休眠时长，默认值5秒
+        sleepWindowInMilliseconds: 3000
+    execution:
+      isolation:
+        thread:
+          # 熔断超时设置，默认为1秒
+          timeoutInMilliseconds: 3000
+  #将核心线程数调低，最大队列数和队列拒绝阈值的值都设置大一点
+  threadpool:
+    default:
+      coreSize: 10 #并发执行的最大线程数，默认10
+      maxQueueSize: 1500 #BlockingQueue的最大队列数，默认值-1
+      #即使maxQueueSize没有达到，达到queueSizeRejectionThreshold该值后，请求也会被拒绝，默认值5
+      queueSizeRejectionThreshold: 1000
+
+# 开启Feign的熔断功能
+feign:
+  hystrix:
+    enabled: true
+  #开启请求和响应压缩
+  compression:
+    request:
+      enabled: true #默认不开启
+      mime-types: text/html,application/xml,application/json # 设置压缩的数据类型，此处也是默认值
+      min-request-size: 2048 # 设置触发压缩的大小下限，此处也是默认值
+    response:
+      enabled: true #默认不开启
+
+
+# springboot中暴露健康检查等断点接口
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+# 暴露健康接口的细节
+  endpoint:
+    health:
+      show-details: always

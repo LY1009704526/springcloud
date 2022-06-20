@@ -1,0 +1,43 @@
+server:
+  port: 9300
+
+eureka:
+  client: #Eureka server本身也是eureka的一个客户端，因为在集群下需要与其他eureka server进行数据的同步
+    service-url:  # 定义eureka server url
+      defaultZone: http://CloudEurekaServerA:9200/eureka,http://CloudEurekaServerB:9201/eureka
+    register-with-eureka: true  #表示是否向Eureka中心注册自己的信息，默认为true
+    fetch-registry: true #是否拉取Eureka server服务注册列表，默认为true
+  instance:
+    #    hostname: localhost #当前eureka实例的主机名
+    #使用ip注册，否则会使用主机名注册了（此处考虑到对老版本的兼容，新版本经过实验都是ip）
+    prefer-ip-address: true
+    #自定义实例显示格式，加上版本号，便于多版本管理，注意是ip-address，早期版本是ipAddress
+    instance-id: ${spring.cloud.client.ip-address}:${spring.application.name}:${server.port}:@project.version@
+
+spring:
+  application:
+    name: cloud-gateway
+  cloud:
+    gateway:
+#      discovery:
+#        locator:
+#          enabled: true #允许Gateway自动实现后端微服务路由转发
+      #配置路由
+      routes:
+        - id: service-page-router
+#          uri: http://127.0.0.1:9100
+          #动态路由：从注册中心获取对应服务的实例
+          #uri以 lb: //开头（lb代表从注册中心获取服务），后面是需要转发到的服务名称
+          uri: lb://service-page
+          predicates:
+            - Path=/page/**
+        - id: service-product-router
+#          uri: http://127.0.0.1:9000
+          uri: lb://service-product
+          predicates: #当断言成功后，交给某一个微服务处理时使用的是转发
+            - Path=/product/**
+          filters:
+            #http://127.0.0.1:9300/product/service/getPort -> /service/getPort -> 商品微服务
+            #去掉uri中的第一部分，所以就要求我们通过网关访问的时候，
+            #把uri的第一部分设置为product，从uri的第二部分开始才是真正的uri
+            - StripPrefix=1 #
